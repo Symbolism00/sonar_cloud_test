@@ -14,7 +14,10 @@ jobs:
           distribution: "adopt"
           cache: maven
 
-      - name: Build
+      - name: Install
+        run: mvn -f ./backend/backend-spring/pom.xml --batch-mode -DskipTests install
+        
+      - name: Package
         run: mvn -f ./backend/backend-spring/pom.xml --batch-mode -DskipTests package
 
       - name: Test
