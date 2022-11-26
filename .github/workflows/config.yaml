@@ -56,6 +56,6 @@ jobs:
         uses: docker/build-push-action@v3
         with:
           context: ./backend/backend-spring/
-          file: Dockerfile
+          file: ./Dockerfile
           push: true
           tags: ${{ secrets.DOCKER_HUB_USERNAME }}/backend-spring:latest
