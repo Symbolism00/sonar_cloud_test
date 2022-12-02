@@ -69,15 +69,17 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}          
           
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2      
-      - name: Build and push
-        uses: docker/build-push-action@v3
-        with:
-          context: backend/backend-spring/
-          file: backend/backend-spring/Dockerfile
-          push: true
-          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/backend-spring:latest
+      - name: Build Docker Image
+        run: docker build -t ${{ secrets.DOCKER_HUB_USERNAME }}/backend-spring:latest .          
+      #- name: Set up Docker Buildx
+      #  uses: docker/setup-buildx-action@v2      
+      #- name: Build and push
+      #  uses: docker/build-push-action@v3
+      #  with:
+      #    context: backend/backend-spring/
+      #    file: backend/backend-spring/Dockerfile
+      #    push: true
+      #    tags: ${{ secrets.DOCKER_HUB_USERNAME }}/backend-spring:latest
 
       - name: Push and Deploy
         run: |
