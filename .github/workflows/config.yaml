@@ -83,7 +83,7 @@ jobs:
         run: |
           echo "Releasing to Amazon Lightsail"
 
-          echo ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }} | docker login --username=${{ secrets.DOCKER_HUB_USERNAME }} --password--password-stdin
+          echo ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }} | docker login --username=${{ secrets.DOCKER_HUB_USERNAME }} --password-stdin
           docker pull ${{ secrets.DOCKER_HUB_USERNAME }}/backend-spring:latest
 
           # upload the docker image for this pipeline
