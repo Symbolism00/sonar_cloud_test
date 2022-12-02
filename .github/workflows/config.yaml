@@ -2,9 +2,6 @@ name: Java CI
 
 on: [push]
 
-env:
-    SERVICE_NAME: "backend-spring"
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -83,44 +80,37 @@ jobs:
           chmod +x /usr/local/bin/lightsailctl
           
       - name: Release to Amazon Lightsail
-        env:
-          CONTAINER_SERVICE_NAME: service-${{ env.SERVICE_NAME }}
         run: |
           echo "Releasing to Amazon Lightsail"
 
-          docker info
-          echo ${{ secrets.DOCKER_AUTH_TOKEN }} | docker login --username=${{ env.DOCKER_USERNAME }} --password-stdin
-          docker pull ${{ needs.build-service.outputs.image }}
+          echo ${{ secrets.DOCKER_AUTH_TOKEN }} | docker login --username=${{ secrets.DOCKER_HUB_USERNAME }} --password-stdin
+          docker pull ${{ secrets.DOCKER_HUB_USERNAME }}/backend-spring:latest
 
           # upload the docker image for this pipeline
           aws lightsail push-container-image \
-            --service-name $CONTAINER_SERVICE_NAME  \
-            --label ${{ env.SERVICE_NAME }}-latest  \
-            --image ${{ needs.build-service.outputs.image }}
+            --service-name backend-spring  \
+            --label backend-spring-latest  \
+            --image ${{ secrets.DOCKER_HUB_USERNAME }}/backend-spring:latest
 
           # get uploaded image (its different every time)
-          IMAGE_TAG=$(aws lightsail get-container-images --service $CONTAINER_SERVICE_NAME | jq -r .containerImages[0].image)
+          IMAGE_TAG=$(aws lightsail get-container-images --service backend-spring | jq -r .containerImages[0].image)
 
           # create a deployment with uploaded docker image
           aws lightsail create-container-service-deployment \
-            --service-name $CONTAINER_SERVICE_NAME \
+            --service-name backend-spring \
             --containers "{
-              \"$CONTAINER_SERVICE_NAME\": {
+              \"backend-spring\": {
                 \"image\": \"$IMAGE_TAG\",
-                \"environment\": {
-                  \"NODE_ENV\": \"production\",
-                  \"PGSSLMODE\": \"no-verify\"
-                },
                 \"ports\": {
                   \"80\": \"HTTP\"
                 }
               }
             }" \
             --public-endpoint "{
-              \"containerName\": \"$CONTAINER_SERVICE_NAME\",
+              \"containerName\": \"backend-spring\",
               \"containerPort\": 80,
               \"healthCheck\": {
-                \"path\": \"/healthcheck/liveness\",
+                \"path\": \"/\",
                 \"intervalSeconds\": 10
               }
             }"          
