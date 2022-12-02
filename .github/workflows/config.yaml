@@ -81,7 +81,7 @@ jobs:
 
       - name: Push and Deploy
         run: |
-          service_name=tamiresviegas/backend-spring
+          service_name=backend-spring
           aws lightsail push-container-image \
             --region eu-west-3 \
             --service-name ${service_name} \
