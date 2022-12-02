@@ -67,28 +67,21 @@ jobs:
         with:
           aws-region: eu-west-3
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}          
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           
-      - name: Build Docker Image
-        run: docker build -t ${{ secrets.DOCKER_HUB_USERNAME }}/backend-spring:latest .          
-      #- name: Set up Docker Buildx
-      #  uses: docker/setup-buildx-action@v2      
-      #- name: Build and push
-      #  uses: docker/build-push-action@v3
-      #  with:
-      #    context: backend/backend-spring/
-      #    file: backend/backend-spring/Dockerfile
-      #    push: true
-      #    tags: ${{ secrets.DOCKER_HUB_USERNAME }}/backend-spring:latest
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2      
+      - name: Build and push
+        uses: docker/build-push-action@v3
+        with:
+          context: backend/backend-spring/
+          file: backend/backend-spring/Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKER_HUB_USERNAME }}/backend-spring:latest
 
       - name: Push and Deploy
         run: |
           service_name=backend-spring
-          aws lightsail push-container-image \
-            --region eu-west-3 \
-            --service-name ${service_name} \
-            --label ${service_name} \
-            --image ${{ secrets.DOCKER_HUB_USERNAME }}/${service_name}:latest
           aws lightsail get-container-images --service-name ${service_name} | jq --raw-output ".containerImages[0].image" > image.txt
           jq --arg image $(cat image.txt) '.containers.app.image = $image' container.template.json > container.json
           aws lightsail create-container-service-deployment --service-name ${service_name} --cli-input-json file://$(pwd)/container.json
