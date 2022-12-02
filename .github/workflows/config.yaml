@@ -2,6 +2,9 @@ name: Java CI
 
 on: [push]
 
+env:
+    SERVICE_NAME: "backend-spring"
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -49,28 +52,9 @@ jobs:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
           
-      - name: Install Utilities
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y jq unzip
-      - name: Install AWS Client
-        run: |
-          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-          unzip awscliv2.zip
-          sudo ./aws/install || true
-          aws --version
-          curl "https://s3.us-west-2.amazonaws.com/lightsailctl/latest/linux-amd64/lightsailctl" -o "lightsailctl"
-          sudo mv "lightsailctl" "/usr/local/bin/lightsailctl"
-          sudo chmod +x /usr/local/bin/lightsailctl
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-region: eu-west-3
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2      
+        
       - name: Build and push
         uses: docker/build-push-action@v3
         with:
@@ -78,10 +62,65 @@ jobs:
           file: backend/backend-spring/Dockerfile
           push: true
           tags: ${{ secrets.DOCKER_HUB_USERNAME }}/backend-spring:latest
-
-      - name: Push and Deploy
+          
+      - name: prereqs
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: 'eu-west-3'
         run: |
-          service_name=backend-spring
-          aws lightsail get-container-images --service-name ${service_name} | jq --raw-output ".containerImages[0].image" > image.txt
-          jq --arg image $(cat image.txt) '.containers.app.image = $image' container.template.json > container.json
-          aws lightsail create-container-service-deployment --service-name ${service_name} --cli-input-json file://$(pwd)/container.json
+          aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+          aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+          aws configure set default.region $AWS_DEFAULT_REGION
+          aws configure set region $AWS_DEFAULT_REGION
+          cat ~/.aws/credentials
+          
+      - name: Install essentials
+        run: |
+          aws --version
+          sudo apt-get update && sudo apt-get -y install curl jq
+          curl https://s3.us-west-2.amazonaws.com/lightsailctl/latest/linux-amd64/lightsailctl -o /usr/local/bin/lightsailctl
+          chmod +x /usr/local/bin/lightsailctl
+          
+      - name: Release to Amazon Lightsail
+        env:
+          CONTAINER_SERVICE_NAME: service-${{ env.SERVICE_NAME }}
+        run: |
+          echo "Releasing to Amazon Lightsail"
+
+          docker info
+          echo ${{ secrets.DOCKER_AUTH_TOKEN }} | docker login --username=${{ env.DOCKER_USERNAME }} --password-stdin
+          docker pull ${{ needs.build-service.outputs.image }}
+
+          # upload the docker image for this pipeline
+          aws lightsail push-container-image \
+            --service-name $CONTAINER_SERVICE_NAME  \
+            --label ${{ env.SERVICE_NAME }}-latest  \
+            --image ${{ needs.build-service.outputs.image }}
+
+          # get uploaded image (its different every time)
+          IMAGE_TAG=$(aws lightsail get-container-images --service $CONTAINER_SERVICE_NAME | jq -r .containerImages[0].image)
+
+          # create a deployment with uploaded docker image
+          aws lightsail create-container-service-deployment \
+            --service-name $CONTAINER_SERVICE_NAME \
+            --containers "{
+              \"$CONTAINER_SERVICE_NAME\": {
+                \"image\": \"$IMAGE_TAG\",
+                \"environment\": {
+                  \"NODE_ENV\": \"production\",
+                  \"PGSSLMODE\": \"no-verify\"
+                },
+                \"ports\": {
+                  \"80\": \"HTTP\"
+                }
+              }
+            }" \
+            --public-endpoint "{
+              \"containerName\": \"$CONTAINER_SERVICE_NAME\",
+              \"containerPort\": 80,
+              \"healthCheck\": {
+                \"path\": \"/healthcheck/liveness\",
+                \"intervalSeconds\": 10
+              }
+            }"          
